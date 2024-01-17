@@ -465,6 +465,7 @@ namespace coz::detail {
     {                                                                          \
         namespace _coz_ = ::coz::detail;                                       \
         using _coz_init = std::decay_t<decltype(init)>;                        \
+        using _coz_promise = _coz_init::promise_type;                          \
         struct _coz_params_t {                                                 \
             z_COZ_TUPLE_FOR_EACH(args, z_COZ_DECL_PARAM_T)                     \
         };                                                                     \
