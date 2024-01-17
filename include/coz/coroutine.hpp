@@ -158,8 +158,7 @@ namespace coz::detail {
         constexpr bool observed = requires { observe(smp_bump<Domain, N>{}); };
         if constexpr (observed) {
             return smp_load_state<Domain, Tick, N + 1>();
-        }
-        else {
+        } else {
             return smp_state<N - 1, decltype(observe(
                                         smp_bump<Domain, N - 1>{}))::value>{};
         }
@@ -209,8 +208,7 @@ namespace coz::detail {
         // unsatisfied expr untouched.
         template<class Expr>
         auto operator,(Expr&& expr)
-                          -> decltype(awt_trans(this,
-                                                std::forward<Expr>(expr))) {
+            -> decltype(awt_trans(this, std::forward<Expr>(expr))) {
             return awt_trans(this, std::forward<Expr>(expr));
         }
     };
@@ -359,6 +357,18 @@ namespace coz {
 } // namespace coz
 
 namespace coz::detail {
+#ifdef __cpp_lib_unreachable
+    using std::unreachable;
+#else
+    [[noreturn]] inline void unreachable() {
+#if defined(BOOST_MSVC)
+        __assume(false);
+#else // GCC, Clang
+        __builtin_unreachable();
+#endif
+    }
+#endif
+
     template<class Promise>
     inline auto implicit_return(Promise* p) -> decltype(p->return_void()) {
         p->return_void();
@@ -366,6 +376,7 @@ namespace coz::detail {
 
     [[noreturn]] inline void implicit_return(void*) {
         assert(!"missing return statement");
+        unreachable();
     }
 
     template<class Promise>
@@ -419,9 +430,7 @@ namespace coz::detail {
     };
 
     template<class T>
-    concept HasReturnObject = requires(T* p) {
-        p->get_return_object();
-    };
+    concept HasReturnObject = requires(T* p) { p->get_return_object(); };
 
     template<HasReturnObject T>
     inline auto get_return_object(T* p) {
@@ -456,7 +465,6 @@ namespace coz::detail {
     {                                                                          \
         namespace _coz_ = ::coz::detail;                                       \
         using _coz_init = std::decay_t<decltype(init)>;                        \
-        using _coz_promise = _coz_init::promise_type;                          \
         struct _coz_params_t {                                                 \
             z_COZ_TUPLE_FOR_EACH(args, z_COZ_DECL_PARAM_T)                     \
         };                                                                     \
@@ -569,7 +577,7 @@ namespace coz::detail {
     label:                                                                     \
         if (init =                                                             \
                 _coz_::auto_reset { static_cast<_coz_awt_t*>(_coz_mem_tmp) }   \
-                -> await_resume();                                             \
+            -> await_resume();                                                 \
             false) {                                                           \
         } else
 
@@ -587,7 +595,7 @@ namespace coz::detail {
 #define COZ_AWAIT_LET(init, expr)                                              \
     z_COZ_AWAIT_LET(init, expr, BOOST_PP_CAT(_coz_L, __LINE__))
 
-#define COZ_YIELD_LITE(expr)                                                   \
+#define COZ_YIELD(expr)                                                        \
     do {                                                                       \
         enum : unsigned { _coz_ip = z_COZ_NEW_IP };                            \
         _coz_ctx->yield_value(expr);                                           \
@@ -599,7 +607,7 @@ namespace coz::detail {
         goto _coz_finalize;                                                    \
     } while (false)
 
-#define COZ_YIELD(expr)                                                        \
+#define COZ_YIELD_KEEP(expr)                                                   \
     do {                                                                       \
         using _coz_tmp_t = decltype(_coz_::norvref(z_COZ_TMP(expr)));          \
         enum : unsigned { _coz_ip = z_COZ_NEW_IP };                            \
@@ -635,7 +643,8 @@ namespace coz::detail {
         _coz_ctx->m_eh = _coz_curr_eh, true)
 
 #define COZ_CATCH                                                              \
-    else case _coz_curr_eh : try {                                             \
+    else case _coz_curr_eh:                                                    \
+    try {                                                                      \
         _coz_ctx->m_eh = _coz_prev_eh;                                         \
         std::rethrow_exception(_coz_ex.release());                             \
     } catch

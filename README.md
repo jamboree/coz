@@ -94,14 +94,16 @@ However, don't use more than one `COZ_AWAIT` in a single statement, and don't us
 * `COZ_AWAIT_LET` allows you to declare a local variable that binds to the `co_await` result, then you can process it in the brace scope.
 
 ### `co_yield`
-Use `COZ_YIELD(expr)`.
+| MACRO | `expr` Lifetime |
+|---|---|
+| `COZ_YIELD(expr)` | transient |
+| `COZ_YIELD_KEEP(expr)` | cross suspension point |
 
 #### Semantic
 ```c++
 promise.yield_value(expr);
 <suspend>
 ```
-#### Remarks
 It differs from the standard semantic, which is equivalent to `co_await promise.yield_value(expr)`. Instead, we ignore the result of `yield_value` and just suspend afterward.
 
 ### `co_return`
