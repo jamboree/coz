@@ -1,7 +1,9 @@
 #ifndef DEMO_GENERATOR_HPP
 #define DEMO_GENERATOR_HPP
 
+#ifndef INCLUDE_BY_GODBOLT
 #include <coz/coroutine.hpp>
+#endif
 #include <optional>
 
 namespace demo {
