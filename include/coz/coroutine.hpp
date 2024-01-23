@@ -57,22 +57,22 @@ namespace coz::detail {
     T norvref(T&&);
 
     template<class T>
-    inline T* unwrap_ptr(T* p) {
+    BOOST_FORCEINLINE T* unwrap_ptr(T* p) {
         return p;
     }
 
     template<class T>
-    inline T* unwrap_ptr(lvref_wrapper<T>* p) {
+    BOOST_FORCEINLINE T* unwrap_ptr(lvref_wrapper<T>* p) {
         return p->m_ptr;
     }
 
     template<class T>
-    inline T&& deref(T* p) {
+    BOOST_FORCEINLINE T&& deref(T* p) {
         return static_cast<T&&>(*p);
     }
 
     template<class T>
-    inline T& deref(lvref_wrapper<T>* p) {
+    BOOST_FORCEINLINE T& deref(lvref_wrapper<T>* p) {
         return *p->m_ptr;
     }
 
@@ -188,13 +188,13 @@ namespace coz::detail {
     struct coro_base : coro_state, coro_proto {};
 
     template<class Promise, class Expr>
-    inline auto awt_trans(Promise* p, Expr&& expr)
+    BOOST_FORCEINLINE auto awt_trans(Promise* p, Expr&& expr)
         -> decltype(p->await_transform(std::forward<Expr>(expr))) {
         return p->await_transform(std::forward<Expr>(expr));
     }
 
     template<class Expr>
-    inline lvref_wrapper<Expr> awt_trans(const void*, Expr& expr) {
+    BOOST_FORCEINLINE lvref_wrapper<Expr> awt_trans(const void*, Expr& expr) {
         return {&expr};
     }
 
@@ -370,7 +370,8 @@ namespace coz::detail {
 #endif
 
     template<class Promise>
-    inline auto implicit_return(Promise* p) -> decltype(p->return_void()) {
+    BOOST_FORCEINLINE auto implicit_return(Promise* p)
+        -> decltype(p->return_void()) {
         p->return_void();
     }
 
@@ -380,18 +381,18 @@ namespace coz::detail {
     }
 
     template<class Promise>
-    inline auto explicit_return(Promise* p, void_t)
+    BOOST_FORCEINLINE auto explicit_return(Promise* p, void_t)
         -> decltype(p->return_void()) {
         p->return_void();
     }
 
     template<class Promise, class T>
-    inline void explicit_return(Promise* p, T&& value) {
+    BOOST_FORCEINLINE void explicit_return(Promise* p, T&& value) {
         p->return_value(std::forward<T>(value));
     }
 
     template<class Expr, class Promise>
-    inline bool suspend(Expr* p, coroutine_handle<Promise> coro) {
+    BOOST_FORCEINLINE bool suspend(Expr* p, coroutine_handle<Promise> coro) {
         using R = decltype(p->await_suspend(coro));
         if constexpr (std::is_same_v<R, bool>) {
             return p->await_suspend(coro);
@@ -403,8 +404,8 @@ namespace coz::detail {
     }
 
     template<class Expr, class Promise>
-    inline bool try_suspend(Expr* p_, coro_ctx<Promise>* ctx, unsigned ip) {
-        const auto p = unwrap_ptr(p_);
+    BOOST_FORCEINLINE bool try_suspend(Expr* p, coro_ctx<Promise>* ctx,
+                                       unsigned ip) {
         if (p->await_ready())
             return false;
         ctx->m_next = ip;
@@ -433,7 +434,7 @@ namespace coz::detail {
     concept HasReturnObject = requires(T* p) { p->get_return_object(); };
 
     template<HasReturnObject T>
-    inline auto get_return_object(T* p) {
+    BOOST_FORCEINLINE auto get_return_object(T* p) {
         return p->get_return_object();
     }
 
@@ -549,8 +550,9 @@ namespace coz::detail {
     enum : unsigned { _coz_ip = z_COZ_NEW_IP };                                \
     z_COZ_HIDE_MAGIC(                                                          \
         _coz_::update_size_align<_coz_state, _coz_awt_t, _coz_ip>());          \
-    if (_coz_::try_suspend(new (_coz_mem_tmp) _coz_awt_t{z_COZ_AWT(expr)},     \
-                           _coz_ctx, _coz_ip)) {                               \
+    if (_coz_::try_suspend(                                                    \
+            _coz_::unwrap_ptr(new (_coz_mem_tmp) _coz_awt_t{z_COZ_AWT(expr)}), \
+            _coz_ctx, _coz_ip)) {                                              \
         goto _coz_suspend;                                                     \
     z_COZ_NEW_EH:                                                              \
         static_cast<_coz_awt_t*>(_coz_mem_tmp)->~_coz_awt_t();                 \

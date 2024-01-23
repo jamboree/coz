@@ -7,7 +7,7 @@ Stackless coroutine for C++, but zero-allocation. Rebirth of [CO2](https://githu
 * Boost.Preprocessor
 
 ## Why
-C++20 introduced coroutine into the language, however, in many cases (especially in async scenario), it incurs memory allocation, as HALO is not guaranteed. This creates resistance to its usage, as the convenience it offers may not worth the overhead it brings. People will tend to write monolithic coroutine function instead of splitting it into small, reusable coroutines in fear of introducing too many allocations, this is contrary to the discipline of programming.
+C++20 introduced coroutine into the language, however, in many cases (especially in async scenario), it incurs memory allocation, as HALO is not guaranteed. This creates resistance to its usage, as the convenience it offers may not worth the overhead it brings. People will tend to write monolithic coroutines instead of splitting them into small, reusable coroutines in fear of introducing too many allocations, this is contrary to the discipline of programming.
 
 ## What it is
 COZ is a single-header library that utilizes preprocessor & compiler magic to emulate the C++ coroutine, while requires zero allocation, it also doesn't require type erasure. With COZ, the entire coroutine is under your control, unlike standard coroutine, which can only be accessed indirectly via the `coroutine_handle`.
@@ -104,7 +104,9 @@ However, don't use more than one `COZ_AWAIT` in a single statement, and don't us
 promise.yield_value(expr);
 <suspend>
 ```
-It differs from the standard semantic, which is equivalent to `co_await promise.yield_value(expr)`. Instead, we ignore the result of `yield_value` and just suspend afterward.
+#### Remarks
+* It differs from the standard semantic, which is equivalent to `co_await promise.yield_value(expr)`. Instead, we ignore the result of `yield_value` and just suspend afterward.
+* While `COZ_YIELD_KEEP` is more general, `COZ_YIELD` is more optimization-friendly.
 
 ### `co_return`
 | MACRO | Core Language |
