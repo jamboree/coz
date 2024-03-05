@@ -392,7 +392,13 @@ namespace coz::detail {
     }
 
     template<class Expr, class Promise>
-    BOOST_FORCEINLINE bool suspend(Expr* p, coroutine_handle<Promise> coro) {
+    BOOST_FORCEINLINE bool try_suspend(Expr* p, coro_ctx<Promise>* ctx,
+                                       unsigned ip) {
+        if (p->await_ready())
+            return false;
+        ctx->m_next = ip;
+        auto coro = coroutine_handle<Promise>::from_address(
+            static_cast<coro_proto*>(ctx));
         using R = decltype(p->await_suspend(coro));
         if constexpr (std::is_same_v<R, bool>) {
             return p->await_suspend(coro);
@@ -401,16 +407,6 @@ namespace coz::detail {
             p->await_suspend(coro);
             return true;
         }
-    }
-
-    template<class Expr, class Promise>
-    BOOST_FORCEINLINE bool try_suspend(Expr* p, coro_ctx<Promise>* ctx,
-                                       unsigned ip) {
-        if (p->await_ready())
-            return false;
-        ctx->m_next = ip;
-        return suspend(p, coroutine_handle<Promise>::from_address(
-                              static_cast<coro_proto*>(ctx)));
     }
 
     template<class Domain, auto Tick>
