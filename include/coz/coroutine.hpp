@@ -1,5 +1,5 @@
 /*//////////////////////////////////////////////////////////////////////////////
-    Copyright (c) 2024 Jamboree
+    Copyright (c) 2024-2025 Jamboree
 
     Distributed under the Boost Software License, Version 1.0. (See accompanying
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -518,12 +518,6 @@ namespace coz::detail {
         }                                                                      \
     }
 
-// TODO: Adopt https://wg21.link/p2806 when available.
-#define z_COZ_AWAIT_EXPR_BEG do {
-#define z_COZ_AWAIT_EXPR_END                                                   \
-    }                                                                          \
-    while (false)
-#define z_COZ_AWAIT_EXPR_RET(e) e
 // clang-format on
 
 // Hide code that's problematic for Intellisense.
@@ -574,14 +568,7 @@ namespace coz::detail {
             false) {                                                           \
         } else
 
-#define COZ_AWAIT(expr)                                                        \
-    z_COZ_AWAIT_EXPR_BEG using _coz_awt_t =                                    \
-        decltype(_coz_::norvref(z_COZ_AWT(expr)));                             \
-    z_COZ_AWAIT_SUSPEND(expr) z_COZ_AWAIT_EXPR_RET(_coz_::auto_reset {         \
-        static_cast<_coz_awt_t*>(_coz_mem_tmp)                                 \
-    } -> await_resume());                                                      \
-    z_COZ_AWAIT_EXPR_END
-
+#define COZ_AWAIT(expr) z_COZ_AWAIT_STMT(, expr, ())
 #define COZ_AWAIT_SET(var, expr) z_COZ_AWAIT_STMT(var =, expr, ())
 #define COZ_AWAIT_APPLY(f, expr, ...) z_COZ_AWAIT_STMT(f, expr, (__VA_ARGS__))
 
@@ -631,8 +618,8 @@ namespace coz::detail {
     } while (false)
 
 #define COZ_TRY                                                                \
-    if (enum                                                                   \
-        : unsigned{_coz_prev_eh = _coz_curr_eh, _coz_curr_eh = z_COZ_NEW_IP};  \
+    if (enum : unsigned{_coz_prev_eh = _coz_curr_eh,                           \
+                        _coz_curr_eh = z_COZ_NEW_IP};                          \
         _coz_ctx->m_eh = _coz_curr_eh, true)
 
 #define COZ_CATCH                                                              \
