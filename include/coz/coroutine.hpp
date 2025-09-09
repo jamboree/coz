@@ -519,16 +519,10 @@ namespace coz::detail {
     }
 
 // TODO: Adopt https://wg21.link/p2806 when available.
-#if defined(BOOST_GCC) | defined(BOOST_CLANG)
-#define z_COZ_AWAIT_EXPR_BEG ({
-#define z_COZ_AWAIT_EXPR_END                                                   \
-    })
-#else
 #define z_COZ_AWAIT_EXPR_BEG do {
 #define z_COZ_AWAIT_EXPR_END                                                   \
     }                                                                          \
     while (false)
-#endif
 #define z_COZ_AWAIT_EXPR_RET(e) e
 // clang-format on
 
