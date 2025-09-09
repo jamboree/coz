@@ -88,8 +88,6 @@ It has 4 variants: `COZ_AWAIT`, `COZ_AWAIT_SET`, `COZ_AWAIT_APPLY` and `COZ_AWAI
 
 #### Remarks
 * The `expr` is either used directly or transformed. `operator co_await` is not used.
-* If your compiler supports _Statement Expression_ extension (e.g. GCC & Clang), you can use `COZ_AWAIT` as an expression.
-However, don't use more than one `COZ_AWAIT` in a single statement, and don't use it as an argument of a function in company with other arguments.
 * `f` in `COZ_AWAIT_APPLY` can also be a marco (e.g. `COZ_RETURN`)
 * `COZ_AWAIT_LET` allows you to declare a local variable that binds to the `co_await` result, then you can process it in the brace scope.
 
