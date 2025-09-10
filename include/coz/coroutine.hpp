@@ -434,7 +434,8 @@ namespace coz::detail {
         return p->get_return_object();
     }
 
-    void get_return_object(const void*); // undefined
+    template<class T>
+    T get_return_object(T*); // undefined
 } // namespace coz::detail
 
 #define z_COZ_DEVOID(...) (_coz_::devoider{}, __VA_ARGS__, _coz_::void_t{})
@@ -455,6 +456,17 @@ namespace coz::detail {
 
 #define z_COZ_NEW_IP (__COUNTER__ - _coz_start)
 #define z_COZ_NEW_EH [[unlikely]] case z_COZ_NEW_IP
+
+#ifdef __INTELLISENSE__
+#define z_COZ_EPILOG return _coz_::get_return_object(&_coz_result);
+#else
+#define z_COZ_EPILOG                                                           \
+    if constexpr (_coz_::HasReturnObject<decltype(_coz_result)>) {             \
+        return _coz_::get_return_object(&_coz_result);                         \
+    } else {                                                                   \
+        return _coz_result;                                                    \
+    }
+#endif
 
 // clang-format off
 // Begin of the coroutine body.
@@ -511,11 +523,7 @@ namespace coz::detail {
                         _coz_state, _coz_::SENTINEL>()>{});                    \
             }                                                                  \
         };                                                                     \
-        if constexpr (_coz_::HasReturnObject<decltype(_coz_result)>) {         \
-            return _coz_::get_return_object(&_coz_result);                     \
-        } else {                                                               \
-            return _coz_result;                                                \
-        }                                                                      \
+        z_COZ_EPILOG                                                           \
     }
 
 // clang-format on
