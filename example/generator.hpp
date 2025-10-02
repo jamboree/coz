@@ -1,7 +1,9 @@
 #ifndef DEMO_GENERATOR_HPP
 #define DEMO_GENERATOR_HPP
 
+#ifndef COZ_COROUTINE_HPP // skip for compiler-explorer
 #include <coz/coroutine.hpp>
+#endif
 #include <optional>
 
 namespace demo {
@@ -10,7 +12,7 @@ namespace demo {
         struct promise_type {
             explicit promise_type(generator_t) noexcept {}
 
-            void finalize() noexcept { m_data.reset(); }
+            void finalize() noexcept {}
 
             template<class U = T>
             void yield_value(U&& u) {
@@ -29,8 +31,9 @@ namespace demo {
     struct [[nodiscard]] generator_impl {
         using promise_t = generator_t<T>::promise_type;
 
-        explicit generator_impl(Params&& params)
-            : m_coro(generator_t<T>{}), m_params(std::move(params)) {}
+        explicit generator_impl(Params&& params) : m_coro(generator_t<T>{}) {
+            m_coro.start(std::move(params));
+        }
 
         ~generator_impl() {
             if (!m_coro.done())
@@ -57,16 +60,12 @@ namespace demo {
             T& operator*() const noexcept { return *m_coro->promise().m_data; }
         };
 
-        iterator begin() {
-            m_coro.done() ? m_coro.start(std::move(m_params)) : m_coro.resume();
-            return iterator{&m_coro};
-        }
+        iterator begin() { return iterator{&m_coro}; }
 
         std::default_sentinel_t end() { return {}; }
 
     private:
         coz::coroutine<promise_t, Params, State> m_coro;
-        Params m_params;
     };
 
     template<class T>
