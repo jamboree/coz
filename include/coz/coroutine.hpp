@@ -172,15 +172,15 @@ namespace coz::detail {
 
     // Program counters.
     struct coro_state {
-        unsigned m_next = SENTINEL;
+        unsigned m_ip = SENTINEL;
         unsigned m_eh = SENTINEL;
     };
 
     // Common ABI as described at:
     // https://devblogs.microsoft.com/oldnewthing/20220103-00/?p=106109
     struct coro_proto {
-        void (&m_resume)(coro_proto*);
-        void (&m_destroy)(coro_proto*);
+        void (*m_resume)(coro_proto*);
+        void (*m_destroy)(coro_proto*);
     };
 
     // We place 'state' before 'proto' to optimize the access, as 'state' is
@@ -199,28 +199,26 @@ namespace coz::detail {
     }
 
     template<class Promise>
-    struct coro_ctx : coro_base, Promise {
-        // Promote these names to avoid confliction with Promise.
-        using coro_base::m_eh;
-        using coro_base::m_next;
+    struct coro_ctx : coro_base {
+        Promise m_promise;
 
         // Use comma to transform the satisfied expr while leaving the
         // unsatisfied expr untouched.
         template<class Expr>
         auto operator,(Expr&& expr)
-            -> decltype(awt_trans(this, std::forward<Expr>(expr))) {
-            return awt_trans(this, std::forward<Expr>(expr));
+            -> decltype(awt_trans(&m_promise, std::forward<Expr>(expr))) {
+            return awt_trans(&m_promise, std::forward<Expr>(expr));
         }
     };
 
     template<class State, class Promise>
     struct finalizer {
         State* m_state;
-        Promise* m_promise;
+        Promise& m_promise;
 
         ~finalizer() {
             m_state->~State();
-            m_promise->finalize();
+            m_promise.finalize();
         }
     };
 
@@ -230,7 +228,7 @@ namespace coz::detail {
         manual_lifetime<State> m_state;
 
         template<class Promise>
-        void invoke(coro_ctx<Promise>* ctx) {
+        BOOST_FORCEINLINE void invoke(coro_ctx<Promise>* ctx) {
             m_state.get()(ctx, m_mem_tmp);
         }
     };
@@ -240,7 +238,7 @@ namespace coz::detail {
         manual_lifetime<State> m_state;
 
         template<class Promise>
-        void invoke(coro_ctx<Promise>* ctx) {
+        BOOST_FORCEINLINE void invoke(coro_ctx<Promise>* ctx) {
             m_state.get()(ctx, nullptr);
         }
     };
@@ -250,6 +248,7 @@ namespace coz {
     template<class Promise = void>
     struct coroutine_handle;
 
+    // The coroutine_handle<void> matches the Common ABI.
     template<>
     struct coroutine_handle<void> {
         constexpr coroutine_handle() noexcept = default;
@@ -265,10 +264,7 @@ namespace coz {
             return m_ptr != nullptr;
         }
 
-        bool done() const noexcept {
-            return static_cast<detail::coro_base*>(m_ptr)->m_next ==
-                   detail::SENTINEL;
-        }
+        bool done() const noexcept { return m_ptr->m_resume == nullptr; }
 
         void operator()() const { m_ptr->m_resume(m_ptr); }
 
@@ -291,11 +287,14 @@ namespace coz {
         }
 
         Promise& promise() const noexcept {
-            return *static_cast<detail::coro_ctx<Promise>*>(m_ptr);
+            return static_cast<detail::coro_ctx<Promise>*>(m_ptr)->m_promise;
         }
 
         static coroutine_handle from_promise(Promise& promise) noexcept {
-            return static_cast<detail::coro_ctx<Promise>*>(&promise);
+            using Ctx = detail::coro_ctx<Promise>;
+            return reinterpret_cast<Ctx*>(
+                reinterpret_cast<std::uint8_t*>(&promise) -
+                offsetof(Ctx, m_promise));
         }
     };
 
@@ -303,31 +302,38 @@ namespace coz {
     struct coroutine : private detail::coro_ctx<Promise> {
         template<class Init>
         explicit coroutine(Init&& init)
-            : detail::coro_ctx<Promise>{{{}, {resume_impl, destroy_impl}},
-                                        Promise(std::forward<Init>(init))} {}
+            : detail::coro_ctx<Promise>{{}, Promise(std::forward<Init>(init))} {
+        }
 
         coroutine(const coroutine&) = delete;
         coroutine& operator=(const coroutine&) = delete;
 
         coroutine_handle<Promise> handle() noexcept { return this; }
 
-        Promise& promise() noexcept { return *this; }
+        Promise& promise() noexcept { return this->m_promise; }
 
-        const Promise& promise() const noexcept { return *this; }
+        const Promise& promise() const noexcept { return this->m_promise; }
 
-        bool done() const noexcept { return this->m_next == detail::SENTINEL; }
+        bool done() const noexcept {
+            // The implementation differs from `coroutine_handle` here, but
+            // it's semantically equal.
+            return this->m_ip == detail::SENTINEL;
+        }
 
+        // It's also considered `done` before calling `start`.
         void start(Params&& params) {
             m_body.m_state.emplace(std::move(params));
-            this->m_next = 0;
+            this->m_ip = 0;
+            this->m_resume = resume_impl;
+            this->m_destroy = destroy_impl;
             m_body.invoke(this);
         }
 
         void resume() { m_body.invoke(this); }
 
         void destroy() {
-            assert(this->m_next != detail::SENTINEL);
-            ++this->m_next;
+            assert(this->m_ip != detail::SENTINEL);
+            ++this->m_ip;
             m_body.invoke(this);
         }
 
@@ -375,20 +381,20 @@ namespace coz::detail {
         p->return_void();
     }
 
-    [[noreturn]] inline void implicit_return(void*) {
+    [[noreturn]] inline void implicit_return(const void*) {
         assert(!"missing return statement");
         unreachable();
     }
 
     template<class Promise>
-    BOOST_FORCEINLINE auto explicit_return(Promise* p, void_t)
-        -> decltype(p->return_void()) {
-        p->return_void();
+    BOOST_FORCEINLINE auto explicit_return(Promise& p, void_t)
+        -> decltype(p.return_void()) {
+        p.return_void();
     }
 
     template<class Promise, class T>
-    BOOST_FORCEINLINE void explicit_return(Promise* p, T&& value) {
-        p->return_value(std::forward<T>(value));
+    BOOST_FORCEINLINE void explicit_return(Promise& p, T&& value) {
+        p.return_value(std::forward<T>(value));
     }
 
     template<class Expr, class Promise>
@@ -396,7 +402,7 @@ namespace coz::detail {
                                        unsigned ip) {
         if (p->await_ready())
             return false;
-        ctx->m_next = ip;
+        ctx->m_ip = ip;
         auto coro = coroutine_handle<Promise>::from_address(
             static_cast<coro_proto*>(ctx));
         using R = decltype(p->await_suspend(coro));
@@ -498,24 +504,26 @@ namespace coz::detail {
                 };                                                             \
             _coz_retry:                                                        \
                 try {                                                          \
-                    switch (_coz_ctx->m_next) {                                \
+                    switch (_coz_ctx->m_ip) {                                  \
                     case 0:
 
 // End of the async body.
 #define COZ_END                                                                \
-                        _coz_ctx->m_next = _coz_::SENTINEL;                    \
-                        _coz_::implicit_return(_coz_ctx);                      \
+                        _coz_ctx->m_ip = _coz_::SENTINEL;                      \
+                        _coz_ctx->m_resume = nullptr;                          \
+                        _coz_::implicit_return(&_coz_ctx->m_promise);          \
                     _coz_finalize:                                             \
-                        _coz_::finalizer{this, _coz_ctx};                      \
+                        _coz_::finalizer{this, _coz_ctx->m_promise};           \
                     }                                                          \
                 } catch (...) {                                                \
-                    _coz_ctx->m_next = _coz_ctx->m_eh;                         \
-                    if (_coz_ctx->m_next != _coz_::SENTINEL) {                 \
+                    _coz_ctx->m_ip = _coz_ctx->m_eh;                           \
+                    if (_coz_ctx->m_ip != _coz_::SENTINEL) {                   \
                         _coz_ex.emplace(std::current_exception());             \
                         goto _coz_retry;                                       \
                     }                                                          \
-                    _coz_::finalizer fin{this, _coz_ctx};                      \
-                    _coz_ctx->unhandled_exception();                           \
+                    _coz_ctx->m_resume = nullptr;                              \
+                    _coz_::finalizer fin{this, _coz_ctx->m_promise};           \
+                    _coz_ctx->m_promise.unhandled_exception();                 \
                 }                                                              \
             _coz_suspend:                                                      \
                 return z_COZ_HIDE_MAGIC(                                       \
@@ -586,8 +594,8 @@ namespace coz::detail {
 #define COZ_YIELD(expr)                                                        \
     do {                                                                       \
         enum : unsigned { _coz_ip = z_COZ_NEW_IP };                            \
-        _coz_ctx->yield_value(expr);                                           \
-        _coz_ctx->m_next = _coz_ip;                                            \
+        _coz_ctx->m_promise.yield_value(expr);                                 \
+        _coz_ctx->m_ip = _coz_ip;                                              \
         goto _coz_suspend;                                                     \
     case _coz_ip:                                                              \
         break;                                                                 \
@@ -601,9 +609,9 @@ namespace coz::detail {
         enum : unsigned { _coz_ip = z_COZ_NEW_IP };                            \
         z_COZ_HIDE_MAGIC(                                                      \
             _coz_::update_size_align<_coz_state, _coz_tmp_t, _coz_ip>());      \
-        _coz_ctx->yield_value(                                                 \
+        _coz_ctx->m_promise.yield_value(                                       \
             _coz_::deref(new (_coz_mem_tmp) _coz_tmp_t{z_COZ_TMP(expr)}));     \
-        _coz_ctx->m_next = _coz_ip;                                            \
+        _coz_ctx->m_ip = _coz_ip;                                              \
         goto _coz_suspend;                                                     \
     case _coz_ip:                                                              \
         static_cast<_coz_tmp_t*>(_coz_mem_tmp)->~_coz_tmp_t();                 \
@@ -613,14 +621,16 @@ namespace coz::detail {
         goto _coz_finalize;                                                    \
     } while (false)
 
-#define z_COZ_RETURN0(t) _coz_ctx->return_void()
-#define z_COZ_RETURN1(t) _coz_::explicit_return(_coz_ctx, z_COZ_DEVOID t)
+#define z_COZ_RETURN0(t) _coz_ctx->m_promise.return_void()
+#define z_COZ_RETURN1(t)                                                       \
+    _coz_::explicit_return(_coz_ctx->m_promise, z_COZ_DEVOID t)
 #define z_COZ_RETURN(t)                                                        \
     BOOST_PP_IIF(BOOST_PP_IS_EMPTY t, z_COZ_RETURN0, z_COZ_RETURN1)(t)
 
 #define COZ_RETURN(...)                                                        \
     do {                                                                       \
-        _coz_ctx->m_next = _coz_::SENTINEL;                                    \
+        _coz_ctx->m_ip = _coz_::SENTINEL;                                      \
+        _coz_ctx->m_resume = nullptr;                                          \
         z_COZ_RETURN((__VA_ARGS__));                                           \
         goto _coz_finalize;                                                    \
     } while (false)
