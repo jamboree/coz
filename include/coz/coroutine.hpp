@@ -1,5 +1,5 @@
 /*//////////////////////////////////////////////////////////////////////////////
-    Copyright (c) 2024-2025 Jamboree
+    Copyright (c) 2024-2026 Jamboree
 
     Distributed under the Boost Software License, Version 1.0. (See accompanying
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -459,6 +459,7 @@ namespace coz::detail {
 #define z_COZ_DECL_PARAM_T(r, _, e) using BOOST_PP_CAT(e, _t) = decltype(e);
 #define z_COZ_DECL_PARAM(r, _, e) typename _coz_params_t::BOOST_PP_CAT(e, _t) e;
 #define z_COZ_FWD_PARAM(r, _, e) std::forward<decltype(e)>(e),
+#define z_COZ_USE_PARAM(r, _, e) using _coz_params::e;
 
 #define z_COZ_NEW_IP (__COUNTER__ - _coz_start)
 #define z_COZ_NEW_EH [[unlikely]] case z_COZ_NEW_IP
@@ -491,6 +492,7 @@ namespace coz::detail {
         ::coz::co_result<_coz_init, _coz_params, _coz_state> _coz_result{      \
             init, _coz_params{z_COZ_TUPLE_FOR_EACH(args, z_COZ_FWD_PARAM)}};   \
         struct _coz_state : _coz_params {                                      \
+            z_COZ_TUPLE_FOR_EACH(args, z_COZ_USE_PARAM)                        \
             __VA_ARGS__                                                        \
             _coz_state(_coz_params&& params)                                   \
                 : _coz_params(std::move(params)) {}                            \
